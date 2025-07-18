@@ -1,3 +1,5 @@
+![Tests](https://github.com/ajwelliott/qtr_api/actions/workflows/test.yml/badge.svg)
+
 # 🐎 QTR API – Horse Racing Data Service
 
 Welcome to **QTR API**, a powerful Node.js + Express + SQL Server API designed for delivering structured horse racing data — including meetings, runners, scratchings, race results, and form history. Built with scalability and speed in mind.

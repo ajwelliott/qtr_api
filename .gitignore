@@ -13,3 +13,9 @@ yarn-error.log*
 *.bak
 *.mdf
 *.ldf
+
+# Generated data/output files
+fetched_sectional_data.json
+meetings_*.json
+received_meetings_data.json
+test_output.txt
