@@ -1,9 +1,18 @@
 // puntersMeetingsDBController.js
 
+require('dotenv').config();
 const sql = require('mssql');
 const dayjs = require('dayjs');
 const { getMeetingsForDate } = require('./puntersMeetingsController');
 const flattenMeeting = require('../utils/flattenMeeting');
+
+// --- Ensure required env vars are present ---
+const requiredEnvVars = ['DB_USER', 'DB_PASSWORD', 'DB_SERVER', 'DB_DATABASE', 'DB_PORT'];
+for (const key of requiredEnvVars) {
+  if (!process.env[key]) {
+    throw new Error(`❌ Missing required environment variable: ${key}`);
+  }
+}
 
 async function insertMeetingsToDbForDateRange(startOffset, endOffset) {
   const today = dayjs();
@@ -24,25 +33,24 @@ async function insertMeetingsToDbForDateRange(startOffset, endOffset) {
     const flattened = meetings.map(flattenMeeting);
     flattenedMeetings.push(...flattened);
 
-    console.log("🧾 Flattened meeting sample:");
-    console.dir(flattened.slice(0, 2), { depth: null });
-
     try {
       const dbConfig = {
-        user: process.env.SQL_USER,
-        password: process.env.SQL_PASSWORD,
-        server: 'localhost',
-        database: 'qtracing',
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        server: process.env.DB_SERVER,
+        port: parseInt(process.env.DB_PORT),
+        database: process.env.DB_DATABASE,
         options: {
-          encrypt: false,
-          trustServerCertificate: true,
-          instanceName: 'qtserver'
+          encrypt: process.env.DB_ENCRYPT === 'true',
+          trustServerCertificate: true
         }
       };
 
       const pool = await sql.connect(dbConfig);
 
       for (const row of flattened) {
+        console.log(`💾 Inserting meeting ${row.meeting_id} (${row.venue_name})`);
+
         await pool.request()
           .input('meeting_id', sql.NVarChar, row.meeting_id)
           .input('meeting_name', sql.NVarChar, row.meeting_name)
@@ -146,14 +154,15 @@ async function insertMeetingsToDbForDateRange(startOffset, endOffset) {
             );
           `);
       }
+
+      console.log(`✅ Inserted ${flattened.length} meetings for ${date}.`);
     } catch (err) {
       console.error("❌ DB Insert error:", err);
     }
   }
 
   return {
-    insertedCount: flattenedMeetings.length,
-    flattenedMeetings
+    insertedCount: flattenedMeetings.length
   };
 }
 

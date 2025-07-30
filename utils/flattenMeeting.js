@@ -31,11 +31,10 @@ module.exports = function flattenMeeting(meeting) {
     venue_weather_last_updated: venue.weatherLastUpdated || null,
     venue_is_clockwise: venue.isClockWise != null ? Boolean(venue.isClockWise) : null,
 
-    // These values are NOT nested – they’re directly under venue
-    country_id: venue.countryId || null,
-    country_name: venue.countryName || null,
-    country_iso2: venue.countryIso2 || null,
-    country_iso3: venue.countryIso3 || null,
+    country_id: venue.country.id || null,
+    country_name: venue.country.name || null,
+    country_iso2: venue.country.iso2 || null,
+    country_iso3: venue.country.iso3 || null,
 
     weather_condition: weather.condition || null,
     weather_condition_icon: weather.conditionIcon || null,

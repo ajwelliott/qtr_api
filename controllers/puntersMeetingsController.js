@@ -1,5 +1,4 @@
 const axios = require('axios');
-const fs = require('fs').promises;
 require('dotenv').config();
 
 // --- CONFIGURATION ---
@@ -34,7 +33,7 @@ function getFormattedDate(date) {
 }
 
 // --- MAIN CONTROLLER ---
-async function getMeetingsForDate(date, options = { saveToFile: true }) {
+async function getMeetingsForDate(date) {
   console.log(`\n🚀 Fetching meeting list for ${date}...`);
 
   const targetDate = new Date(`${date}T00:00:00Z`);
@@ -79,13 +78,6 @@ async function getMeetingsForDate(date, options = { saveToFile: true }) {
       });
 
       console.log(`✅ Success! Found ${filtered.length} meetings in ${ALLOWED_COUNTRIES.join(', ')}`);
-
-      if (options.saveToFile) {
-        const filename = `meetings_${date}.json`;
-        await fs.writeFile(filename, JSON.stringify(filtered, null, 2));
-        console.log(`💾 Filtered meetings data saved to ${filename}`);
-      }
-
       return { meetings: filtered };
     } else {
       console.log("⚠️ No meetings data received from the API.");
@@ -110,7 +102,7 @@ async function getMeetingsForDateRange(startOffset = 0, endOffset = 0) {
     date.setDate(date.getDate() + offset);
     const formattedDate = getFormattedDate(date);
 
-    const { meetings } = await getMeetingsForDate(formattedDate, { saveToFile: false });
+    const { meetings } = await getMeetingsForDate(formattedDate);
     results.push({ date: formattedDate, meetings });
   }
 
