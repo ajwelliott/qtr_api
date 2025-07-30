@@ -1,98 +1,116 @@
-// routes/index.js
 const express = require('express');
 const router = express.Router();
 
-// Controllers
+// ✅ Controller Imports
 const puntersMeetingsController = require('../controllers/puntersMeetingsController');
-console.log('✅ Loaded puntersMeetingsController methods:', Object.keys(puntersMeetingsController));
-const meetingController = require('../controllers/meetingController'); // Your existing meetingController
-console.log('✅ Loaded meetingController methods:', Object.keys(meetingController));
+const puntersMeetingsDBController = require('../controllers/puntersMeetingsDBController');
+const meetingController = require('../controllers/meetingController');
 const runnerController = require('../controllers/runnerController');
-console.log('✅ Loaded runnerController methods:', Object.keys(runnerController));
 const scratchingController = require('../controllers/scratchingController');
-console.log('✅ Loaded scratchingController methods:', Object.keys(scratchingController));
 const formHistoryController = require('../controllers/formHistoryController');
-console.log('✅ Loaded formHistoryController methods:', Object.keys(formHistoryController));
 const resultsController = require('../controllers/resultsController');
-console.log('✅ Loaded resultsController methods:', Object.keys(resultsController));
 const puntersSectionalsController = require('../controllers/puntersSectionalsController');
-console.log('✅ Loaded puntersSectionalsController methods:', Object.keys(puntersSectionalsController));
 const raceController = require('../controllers/raceController');
-console.log('✅ Loaded raceController methods:', Object.keys(raceController));
 const conditionsController = require('../controllers/conditionsController');
-console.log('✅ Loaded conditionsController methods:', Object.keys(conditionsController));
-
-// >>> ADD THIS NEW CONTROLLER IMPORT <<<
+const tracksController = require('../controllers/tracksController');
+const betfairCommissionController = require('../controllers/betfairCommissionController');
+const linkRunnersController = require('../controllers/linkRunnersController');
 const generalDbController = require('../controllers/generalDbController');
-console.log('✅ Loaded generalDbController methods:', Object.keys(generalDbController));
 
+// ✅ API: Punters Meetings (new endpoint for Python insertion)
+router.get('/api/punters-meetings', async (req, res) => {
+  const startOffset = parseInt(req.query.startOffset || '0');
+  const endOffset = parseInt(req.query.endOffset || startOffset);
 
-// ✅ Route definitions
+  try {
+    const results = await puntersMeetingsController.getMeetingsForDateRange(startOffset, endOffset);
+    const allMeetings = results.flatMap(r => r.meetings);
+    res.json(allMeetings);
+  } catch (err) {
+    console.error('❌ Failed to fetch punters meetings:', err);
+    res.status(500).json({ error: 'Failed to fetch meetings', details: err.message });
+  }
+});
+
+// ✅ Route Definitions
 
 // Conditions
-router.get('/conditions', conditionsController.getConditions);
+router.get('/api/conditions', conditionsController.getConditions);
 
 // Meetings
-router.get('/meetings', meetingController.getMeetingsWithRaces);
+router.get('/api/meetings', meetingController.getMeetingsWithRaces);
 
 // Scratchings
-router.get('/scratchings', scratchingController.getAllScratchings);
-router.get('/meetings/:id/scratchings', scratchingController.getMeetingScratchings);
-router.get('/races/:raceId/scratchings', scratchingController.getRaceScratchings);
+router.get('/api/scratchings', scratchingController.getAllScratchings);
+router.get('/api/meetings/:id/scratchings', scratchingController.getMeetingScratchings);
+router.get('/api/races/:raceId/scratchings', scratchingController.getRaceScratchings);
 
 // Runners
-router.get('/runners/:runnerId/profile', runnerController.getRunnerProfile);
-router.get('/runners/:runnerId/history', formHistoryController.getFormHistoryByRunner);
-router.get('/runners/search', runnerController.searchRunnersByName);
-// If you want a general 'get all runners' endpoint, you could add this:
-// router.get('/runners', runnerController.getAllRunners); // This would call the function from your runnerController
+router.get('/api/runners/:runnerId/profile', runnerController.getRunnerProfile);
+router.get('/api/runners/:runnerId/history', formHistoryController.getFormHistoryByRunner);
+router.get('/api/runners/search', runnerController.searchRunnersByName);
 
 // Form History
-router.get('/form-history/:runnerId', formHistoryController.getFormHistoryByRunner);
-router.get('/form-history', formHistoryController.searchFormHistory);
+router.get('/api/form-history/:runnerId', formHistoryController.getFormHistoryByRunner);
+router.get('/api/form-history', formHistoryController.searchFormHistory);
 
 // Results
-router.get('/results', resultsController.getAllResults);
-router.get('/results/race/:raceId', resultsController.getRaceResults);
-router.get('/results/runner/:runnerId', resultsController.getRunnerResults);
+router.get('/api/results', resultsController.getAllResults);
+router.get('/api/results/race/:raceId', resultsController.getRaceResults);
+router.get('/api/results/runner/:runnerId', resultsController.getRunnerResults);
 
-// Race Details with Runners
-router.get('/races/:raceId/runners', raceController.getRaceDetailsWithRunners);
+// Race + Runners
+router.get('/api/races/:raceId/runners', raceController.getRaceDetailsWithRunners);
 
-// Punters sectionals information
-router.get('/sectional-data/fetch', puntersSectionalsController.fetchAndProcessSectionalData);
+// Sectionals
+router.get('/api/sectional-data/fetch', puntersSectionalsController.fetchAndProcessSectionalData);
 
+// Tracks
+router.get('/api/tracks', tracksController.getAllTracks);
 
-// >>> ADD THE NEW GENERAL DATABASE API ROUTE <<<
-// Example: GET /api/data/pf_meeting_list
-// Example: GET /api/data/pf_races?lastUpdateColumn=lastUpdate&lastUpdateFrom=2023-01-01&lastUpdateTo=2023-01-31
-// Example: GET /api/data/pf_field_list?getAll=true
-// >>> IMPORTANT: Define the specific route FIRST <<<
-router.get('/data/tables', generalDbController.getAvailableTables);
-router.get('/data/:tableName', generalDbController.getDataFromTable);
+// Betfair Commission
+router.get('/api/betfair-commission', betfairCommissionController.getAllCommissions);
 
+// Linked Runners
+router.get('/api/link-runners', linkRunnersController.getAllLinkRunners);
 
-// 🔍 Debug route (optional)
-router.get('/debug/:id', async (req, res) => {
-    try {
-        const { poolPromise } = require('../db/sql');
-        const pool = await poolPromise;
-        const id = parseInt(req.params.id);
+// Generic DB Data Access
+router.get('/api/data/tables', generalDbController.getAvailableTables);
+router.get('/api/data/:tableName', generalDbController.getDataFromTable);
 
-        const [races, fields] = await Promise.all([
-            pool.request().query(`SELECT * FROM pf_races WHERE meetingId = ${id}`),
-            pool.request().query(`SELECT * FROM pf_field_list WHERE meetingId = ${id}`)
-        ]);
+// 🔍 Debug (Optional)
+router.get('/api/debug/:id', async (req, res) => {
+  try {
+    const { poolPromise } = require('../db/sql');
+    const pool = await poolPromise;
+    const id = parseInt(req.params.id);
 
-        res.json({
-            meetingId: id,
-            races: races.recordset,
-            fields: fields.recordset
-        });
-    } catch (err) {
-        console.error('❌ Debug error:', err);
-        res.status(500).send('Error retrieving debug data');
-    }
+    const [races, fields] = await Promise.all([
+      pool.request().query(`SELECT * FROM pf_races WHERE meetingId = ${id}`),
+      pool.request().query(`SELECT * FROM pf_field_list WHERE meetingId = ${id}`)
+    ]);
+
+    res.json({ meetingId: id, races: races.recordset, fields: fields.recordset });
+  } catch (err) {
+    console.error('❌ Debug error:', err);
+    res.status(500).send('Error retrieving debug data');
+  }
 });
+
+router.post('/api/punters-meetings/insert', async (req, res) => {
+  const { startOffset = 0, endOffset = 0 } = req.body;
+
+  try {
+    const result = await puntersMeetingsDBController.insertMeetingsToDbForDateRange(
+      parseInt(startOffset),
+      parseInt(endOffset)
+    );
+    res.json({ success: true, result });
+  } catch (err) {
+    console.error('❌ DB Insert error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 
 module.exports = router;

@@ -14,6 +14,10 @@ const ALLOWED_TABLES = [
     'pf_form_history',
     'pf_scratchings',
     'pf_conditions',
+    'betfair_commission',
+    'tracks',
+    'link_runners',
+    'punters_meetings',
     // Add any other tables you want to expose via this general API
 ];
 
@@ -29,6 +33,10 @@ const ALLOWED_COLUMNS_FOR_TABLE = {
     'pf_form_history' : ['runnerId', 'formId', 'updated_at'],
     'pf_scratchings': ['scratchingId', 'runnerId', 'updated_at'], // Example
     'pf_conditions': ['conditionId', 'meetingId', 'updated_at'], // Example
+    'betfair_commission' : ['state', 'commission', 'state_name'],
+    'tracks' : ['MasterTrackName', 'VariationTrackName'],
+    'link_runners' : ['LinkKey', 'meetingDate', 'MasterTrackName', 'raceId', 'runnerId', 'raceId_runnerId'],
+    'punters_meetings' : ['meeting_id', 'venue_id'],
 };
 
 /**

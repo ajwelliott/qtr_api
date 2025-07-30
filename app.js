@@ -1,5 +1,5 @@
 const express = require('express');
-const cors = require('cors'); // ✅ Add this
+const cors = require('cors');
 const dotenv = require('dotenv');
 const routes = require('./routes/index');
 
@@ -8,28 +8,27 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ✅ Enable CORS for Vite dev server
+// ✅ Enable CORS for front-end dev server
 app.use(cors({
-  origin: 'http://localhost:5173', // Vite runs on 5173
+  origin: 'http://localhost:5173', // adjust for your front end
   credentials: true
 }));
 
-// ✅ Parse JSON bodies
-app.use(express.json());
+// ✅ Increase request body size limits to handle large payloads
+app.use(express.json({ limit: '20mb' }));
+app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
-// ✅ Register API routes
-app.use('/api', routes);
+// ✅ Mount all routes under /
+app.use('/', routes);
 
 // ✅ Optional: test route
 app.get('/api/test', (req, res) => {
   res.json({ message: 'CORS is working! 🧩' });
 });
 
-// ✅ Start the server unless running tests
-if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, () => {
-    console.log(`🚀 Server running at http://localhost:${PORT}`);
-  });
-}
+// ✅ Start server once — on all interfaces for LAN access
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Server running at http://0.0.0.0:${PORT}`);
+});
 
 module.exports = app;

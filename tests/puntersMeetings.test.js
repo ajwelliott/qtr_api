@@ -1,23 +1,24 @@
 // This file contains automated Jest tests for puntersMeetingsController.js
 
 // Mock axios and fs.promises before importing the controller
-// This ensures that actual network requests and file system operations are not performed during tests.
 const axios = require('axios');
 const fs = require('fs').promises;
 
-// Jest's mock functions allow us to control the behavior of imported modules
+// Mock the required modules
 jest.mock('axios');
 jest.mock('fs', () => ({
     promises: {
-        writeFile: jest.fn(), // Mock the writeFile function
+        writeFile: jest.fn(),
     },
 }));
 
-// Now import the controller after mocking its dependencies
-const { getMeetingsForDate } = require('../controllers/puntersMeetingsController');
+// Import the functions under test after mocking
+const {
+    getMeetingsForDate,
+    getMeetingsForDateRange
+} = require('../controllers/puntersMeetingsController');
 
 describe('puntersMeetingsController', () => {
-    // Clear all mocks before each test to ensure a clean slate
     beforeEach(() => {
         jest.clearAllMocks();
     });
@@ -29,7 +30,6 @@ describe('puntersMeetingsController', () => {
             { id: 'm2', name: 'Meeting B', venue: { country: { name: 'Australia' } } },
         ];
 
-        // Configure the mocked axios.get to return our mock data
         axios.get.mockResolvedValueOnce({
             data: {
                 data: {
@@ -38,24 +38,31 @@ describe('puntersMeetingsController', () => {
             },
         });
 
-        // Call the function under test
         const result = await getMeetingsForDate(mockDate);
 
-        // Assertions:
-        // 1. Check if axios.get was called with the correct URL and parameters
+        // ✅ Check axios.get was called with correct endpoint and params
         expect(axios.get).toHaveBeenCalledTimes(1);
         expect(axios.get).toHaveBeenCalledWith(
             'https://puntapi.com/racing',
             expect.objectContaining({
                 params: expect.objectContaining({
                     operationName: 'meetingsIndexByStartEndTime',
-                    variables: expect.stringContaining(`"startTime":"2025-07-07T14:00:00Z","endTime":"2025-07-08T12:59:59.999Z"`),
-                    extensions: expect.stringContaining(`"sha256Hash":"ddea43c96aff80097730c1cea2b715459febf6eea4bf3ee6d8f09eee7c271c9c"`),
+                    variables: expect.any(String),
+                    extensions: expect.any(String),
                 }),
             })
         );
 
-        // 2. Check if fs.promises.writeFile was called to save the JSON file
+        // ✅ Parse variables and extensions to validate important keys
+        const calledParams = axios.get.mock.calls[0][1].params;
+        const parsedVars = JSON.parse(calledParams.variables);
+        expect(parsedVars.startTime).toBe('2025-07-07T14:00:00Z');
+        expect(parsedVars.endTime).toBe('2025-07-08T12:59:59.999Z');
+
+        const parsedExt = JSON.parse(calledParams.extensions);
+        expect(parsedExt.persistedQuery.sha256Hash).toBe('ddea43c96aff80097730c1cea2b715459febf6eea4bf3ee6d8f09eee7c271c9c');
+
+        // ✅ Confirm file write
         const expectedFileName = `meetings_${mockDate}.json`;
         expect(fs.writeFile).toHaveBeenCalledTimes(1);
         expect(fs.writeFile).toHaveBeenCalledWith(
@@ -63,12 +70,11 @@ describe('puntersMeetingsController', () => {
             JSON.stringify(mockMeetingsData, null, 2)
         );
 
-        // 3. Check if the function returned the expected meeting data
+        // ✅ Function returns correct result
         expect(result).toEqual(mockMeetingsData);
     });
 
     test('getMeetingsForDate should return an empty array if no meetings are found', async () => {
-        // Configure axios.get to return an empty meetings array
         axios.get.mockResolvedValueOnce({
             data: {
                 data: {
@@ -80,29 +86,57 @@ describe('puntersMeetingsController', () => {
         const result = await getMeetingsForDate('2025-01-01');
 
         expect(axios.get).toHaveBeenCalledTimes(1);
-        expect(fs.writeFile).toHaveBeenCalledTimes(1); // Still attempts to write an empty array
+        expect(fs.writeFile).toHaveBeenCalledTimes(1);
         expect(result).toEqual([]);
     });
 
     test('getMeetingsForDate should return null and log an error on API failure', async () => {
-        // Configure axios.get to throw an error
         const errorMessage = 'Network Error';
         axios.get.mockRejectedValueOnce(new Error(errorMessage));
 
-        // Mock console.error to prevent it from polluting test output and to assert it was called
         const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
         const result = await getMeetingsForDate('2025-07-09');
 
         expect(axios.get).toHaveBeenCalledTimes(1);
-        expect(fs.writeFile).not.toHaveBeenCalled(); // No file written on error
+        expect(fs.writeFile).not.toHaveBeenCalled();
         expect(result).toBeNull();
         expect(consoleErrorSpy).toHaveBeenCalledWith(
             expect.stringContaining('Failed to fetch meeting list:'),
             expect.stringContaining(errorMessage)
         );
 
-        // Restore original console.error
         consoleErrorSpy.mockRestore();
+    });
+
+    test('getMeetingsForDateRange should fetch and return meetings across a date range', async () => {
+        const today = new Date();
+        const tomorrow = new Date();
+        tomorrow.setDate(today.getDate() + 1);
+
+        const mockDates = [
+            today.toISOString().slice(0, 10),
+            tomorrow.toISOString().slice(0, 10)
+        ];
+
+        const mockMeetingsData = [
+            { id: 'm1', name: 'Meeting X', venue: { country: { name: 'Australia' } } }
+        ];
+
+        axios.get.mockResolvedValue({
+            data: {
+                data: {
+                    meetings: mockMeetingsData,
+                },
+            },
+        });
+
+        const results = await getMeetingsForDateRange(0, 1);
+
+        expect(results.length).toBe(2);
+        expect(results[0]).toHaveProperty('date', mockDates[0]);
+        expect(results[0]).toHaveProperty('meetings');
+        expect(results[1]).toHaveProperty('date', mockDates[1]);
+        expect(fs.writeFile).toHaveBeenCalledTimes(2);
     });
 });
