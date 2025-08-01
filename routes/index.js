@@ -16,6 +16,7 @@ const tracksController = require('../controllers/tracksController');
 const betfairCommissionController = require('../controllers/betfairCommissionController');
 const linkRunnersController = require('../controllers/linkRunnersController');
 const generalDbController = require('../controllers/generalDbController');
+const puntersOddsController = require('../controllers/puntersOddsController'); // ✅ New controller
 
 // ✅ API: Punters Meetings (new endpoint for Python insertion)
 router.get('/api/punters-meetings', async (req, res) => {
@@ -74,6 +75,9 @@ router.get('/api/betfair-commission', betfairCommissionController.getAllCommissi
 // Linked Runners
 router.get('/api/link-runners', linkRunnersController.getAllLinkRunners);
 
+// Odds
+router.get('/api/odds/event/:eventId', puntersOddsController.getOddsForEvent); // ✅ NEW
+
 // Generic DB Data Access
 router.get('/api/data/tables', generalDbController.getAvailableTables);
 router.get('/api/data/:tableName', generalDbController.getDataFromTable);
@@ -111,6 +115,5 @@ router.post('/api/punters-meetings/insert', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
-
 
 module.exports = router;

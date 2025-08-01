@@ -1,16 +1,90 @@
-// puntersMeetingsDBController.js
-
+// puntersMeetingsDBController.js (final integrated version)
 require('dotenv').config();
 const sql = require('mssql');
 const dayjs = require('dayjs');
+const axios = require('axios');
 const { getMeetingsForDate } = require('./puntersMeetingsController');
 const flattenMeeting = require('../utils/flattenMeeting');
+const flattenRunnersFromEvent = require('../utils/flattenRunnersFromEvent');
+
+const PUNTERS_API_URL = 'https://puntapi.com/racing';
+const HEADERS = {
+  "accept": "*/*",
+  "accept-language": "en-US,en;q=0.9",
+  "authorization": "Bearer none",
+  "content-type": "application/json",
+  "origin": "https://www.punters.com.au",
+  "referer": "https://www.punters.com.au/",
+  "user-agent": "Mozilla/5.0"
+};
 
 // --- Ensure required env vars are present ---
 const requiredEnvVars = ['DB_USER', 'DB_PASSWORD', 'DB_SERVER', 'DB_DATABASE', 'DB_PORT'];
 for (const key of requiredEnvVars) {
   if (!process.env[key]) {
     throw new Error(`❌ Missing required environment variable: ${key}`);
+  }
+}
+
+async function fetchEventDetails(eventId) {
+  const variables = {
+    brand: "punters",
+    brandEnum: "punters",
+    eventId: eventId
+  };
+  const extensions = {
+    persistedQuery: {
+      version: 1,
+      sha256Hash: "1208f445f68dbd694b26c8d0e4d1cad7112e80f9e3bbc61d672de2610f261f94"
+    }
+  };
+  const params = {
+    operationName: "getEventById",
+    variables: JSON.stringify(variables),
+    extensions: JSON.stringify(extensions)
+  };
+
+  const response = await axios.get(PUNTERS_API_URL, { params, headers: HEADERS });
+  return response.data?.data?.event;
+}
+
+async function insertRunners(pool, runnerRows) {
+  for (const row of runnerRows) {
+    const columns = Object.keys(row);
+    const values = columns.map(col => `@${col}`);
+
+    const mergeSql = `
+      MERGE INTO punters_races AS target
+      USING (SELECT ${columns.map(col => `@${col} AS ${col}`).join(', ')}) AS source
+      ON target.composite_key = source.composite_key
+      WHEN MATCHED THEN UPDATE SET ${columns.map(col => `target.${col} = source.${col}`).join(', ')}
+      WHEN NOT MATCHED THEN INSERT (${columns.join(', ')}) VALUES (${values.join(', ')});`;
+
+    const request = pool.request();
+    for (const col of columns) {
+      request.input(col, row[col]);
+    }
+    await request.query(mergeSql);
+  }
+}
+
+async function insertExotics(pool, exoticRows) {
+  for (const row of exoticRows) {
+    const columns = Object.keys(row);
+    const values = columns.map(col => `@${col}`);
+
+    const mergeSql = `
+      MERGE INTO punters_results AS target
+      USING (SELECT ${columns.map(col => `@${col} AS ${col}`).join(', ')}) AS source
+      ON target.exotic_id = source.exotic_id
+      WHEN MATCHED THEN UPDATE SET ${columns.map(col => `target.${col} = source.${col}`).join(', ')}
+      WHEN NOT MATCHED THEN INSERT (${columns.join(', ')}) VALUES (${values.join(', ')});`;
+
+    const request = pool.request();
+    for (const col of columns) {
+      request.input(col, row[col]);
+    }
+    await request.query(mergeSql);
   }
 }
 
@@ -155,7 +229,46 @@ async function insertMeetingsToDbForDateRange(startOffset, endOffset) {
           `);
       }
 
-      console.log(`✅ Inserted ${flattened.length} meetings for ${date}.`);
+      // ✅ Insert runners and exotic results
+      const allRunnerRows = [];
+      const allExoticRows = [];
+
+      for (const meeting of meetings) {
+        if (!Array.isArray(meeting.events)) continue;
+
+        for (const event of meeting.events) {
+          try {
+            const fullEvent = await fetchEventDetails(event.id);
+            const runners = flattenRunnersFromEvent(fullEvent, meeting.id, meeting.name, meeting.meetingDateLocal);
+            allRunnerRows.push(...runners);
+
+            if (fullEvent.isResulted && Array.isArray(fullEvent.exoticResult)) {
+              for (const result of fullEvent.exoticResult) {
+                allExoticRows.push({
+                  exotic_id: result.id,
+                  event_id: fullEvent.id,
+                  meeting_id: meeting.id,
+                  event_name: fullEvent.name,
+                  event_number: fullEvent.eventNumber,
+                  tote: result.tote,
+                  exotic_market: result.exoticMarket,
+                  results: result.results,
+                  amount: parseFloat(result.amount),
+                  created_date: new Date()
+                });
+              }
+            }
+          } catch (err) {
+            console.error(`❌ Failed to fetch or flatten event ${event.id}`, err.message);
+          }
+        }
+      }
+
+      await insertRunners(pool, allRunnerRows);
+      await insertExotics(pool, allExoticRows);
+
+      console.log(`✅ Inserted ${flattened.length} meetings, ${allRunnerRows.length} runners, and ${allExoticRows.length} exotic results for ${date}.`);
+
     } catch (err) {
       console.error("❌ DB Insert error:", err);
     }
